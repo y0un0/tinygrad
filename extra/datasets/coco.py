@@ -2,6 +2,7 @@ import json
 import pathlib
 import zipfile
 import numpy as np
+from torchvision.transforms import functional as F
 from extra.utils import download_file
 import pycocotools._mask as _mask
 from examples.mask_rcnn import Masker
@@ -44,6 +45,35 @@ id_to_height = create_dict('id', 'height', images)
 json_category_id_to_contiguous_id = {v['id']: i + 1 for i, v in enumerate(categories)}
 contiguous_category_id_to_json_id = {v:k for k,v in json_category_id_to_contiguous_id.items()}
 
+def resize_data(image, target, min_size, max_size):
+  w, h = image.size
+  size = np.random.choice(min_size, 1)
+  if max_size is not None:
+    min_original_size, max_original_size = float(min((w, h))), float(max((w, h)))
+    if max_original_size / min_original_size * size > max_size:
+      size = int(round(max_size * min_original_size / max_original_size))
+  if (w <= h and w == size) or (h <= w and h == size):
+    image = F.resize(image, (h, w))
+    target = target.resize(image.size)
+  if w < h:
+    oh, ow = int(size * h / w), size
+  else:
+    oh, ow = size, int(size * w / h)
+  image = F.resize(image, (oh, ow))
+  target = target.resize(image.size)
+  return image, target
+
+def rand_horizontal_flip(image, target, prob):
+  if np.random.rand() < prob:
+    image = np.fliplr(image)
+    target = target.transpose(0)
+  return image, target
+
+def normalize(image, mean, std, to_bgr255=True):
+  if to_bgr255:
+    image = image[[2, 1, 0]] * 255
+  image = F.normalize(image, mean=mean, std=std)
+  return image
 
 def encode(bimask):
   if len(bimask.shape) == 3:
