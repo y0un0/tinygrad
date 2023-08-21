@@ -36,7 +36,6 @@ package.json
 package-lock.json
 temp
 *.csv
-Lib/
-Scripts/
-share/
-pyvenv.cfg
+.coverage
+coverage.xml
+htmlcov
