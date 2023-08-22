@@ -1,7 +1,10 @@
 import json
 import pathlib
 import zipfile
+from PIL import Image
+import functools
 import numpy as np
+import torch
 from torchvision.transforms import functional as F
 from extra.utils import download_file
 import pycocotools._mask as _mask
@@ -44,6 +47,28 @@ id_to_width = create_dict('id', 'width', images)
 id_to_height = create_dict('id', 'height', images)
 json_category_id_to_contiguous_id = {v['id']: i + 1 for i, v in enumerate(categories)}
 contiguous_category_id_to_json_id = {v:k for k,v in json_category_id_to_contiguous_id.items()}
+
+@functools.lru_cache(None)
+def get_val_files():
+  val_path = BASEDIR / "val2017/"
+  return sorted([x for x in val_path.iterdir() if x.stem.split("_")[-1]])   
+
+def load_pair(file_path):
+  img = Image.open(file_path).convert('RGB')
+  boxes = [obj["bbox"] for obj in annotations if obj['image_id'] == file_name_to_id[file_path.name] and obj['iscrowd'] == 0]
+  boxes = np.array(boxes, dtype=np.float32).reshape(-1, 4)
+  boxes[:, 2:] += boxes[:, :2]
+  boxes[:, 0::2], boxes[:, 1::2] = boxes[:, 0::2].clip(0, img.size[1]), boxes[:, 1::2].clip(0, img.size[0])
+  keep = (boxes[:, 3] > boxes[:, 1]) & (boxes[:, 2] > boxes[:, 0])
+  boxes = boxes[keep]
+  # TODO: get classes
+  mask = [obj["segmentation"] for obj in annotations if obj['image_id'] == file_name_to_id[file_path.name] and obj['iscrowd'] == 0]
+  # TODO: load mask as in: https://github.com/mlcommons/training/blob/master/object_detection/pytorch/maskrcnn_benchmark/structures/segmentation_mask.py
+  return img, boxes, mask
+
+val_files = get_val_files()
+img, boxes, mask = load_pair(val_files[0])
+print(boxes)
 
 def resize_data(image, target, min_size, max_size):
   w, h = image.size
